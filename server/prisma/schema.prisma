@@ -1,0 +1,328 @@
+// Prisma schema (initial draft)
+// Using separate displayNumber for resequencing while keeping id stable.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id            Int       @id @default(autoincrement())
+  displayNumber Int       @unique
+  name          String
+  age           Int?
+  sex           Sex
+  address       String?
+  phone         String?
+  whatsapp      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  visits        Visit[]
+  labWorks      LabWork[]
+  payments      Payment[]
+  dentalHistoryItems  PatientDentalHistory[]
+  medicalHistoryItems PatientMedicalHistory[]
+  allergyItems        PatientAllergy[]
+}
+
+enum Sex {
+  M
+  F
+  Other
+}
+
+enum VisitType {
+  GENERAL
+  ORTHODONTIC
+  ROOT_CANAL
+  FOLLOW_UP
+}
+
+enum BracketType {
+  METAL_REGULAR
+  METAL_PREMIUM
+}
+
+model Visit {
+  id              Int              @id @default(autoincrement())
+  patient         Patient          @relation(fields: [patientId], references: [id])
+  patientId       Int
+  type            VisitType
+  date            DateTime         @default(now())
+  generalDetails  GeneralVisitDetails?
+  orthodonticPlan OrthodonticPlan?
+  rootCanalPlan   RootCanalPlan?
+  followUpOfId    Int?
+  followUpOf      Visit?           @relation("FollowUp", fields: [followUpOfId], references: [id])
+  followUps       Visit[]          @relation("FollowUp")
+  prescriptions   Prescription[]
+  media           MediaAttachment[]
+  payments        Payment[]
+}
+
+model GeneralVisitDetails {
+  id              Int           @id @default(autoincrement())
+  visit           Visit         @relation(fields: [visitId], references: [id])
+  visitId         Int           @unique
+  notes           String?
+  nextAppointmentDate DateTime?
+  treatmentPlans  TreatmentPlanItem[]
+  complaints      ComplaintOnVisit[]
+  oralFindings    OralFindingOnVisit[]
+  investigations  Investigation[]
+  treatmentsDone  TreatmentDoneItem[]
+}
+
+model ComplaintOption {
+  id    Int    @id @default(autoincrement())
+  label String @unique
+  visits ComplaintOnVisit[]
+}
+
+model QuadrantOption {
+  id    Int    @id @default(autoincrement())
+  code  String @unique
+  visits ComplaintOnVisit[]
+}
+
+model ComplaintOnVisit {
+  id               Int             @id @default(autoincrement())
+  generalVisit     GeneralVisitDetails @relation(fields: [generalVisitId], references: [id])
+  generalVisitId   Int
+  complaint        ComplaintOption  @relation(fields: [complaintId], references: [id])
+  complaintId      Int
+  quadrant         QuadrantOption   @relation(fields: [quadrantId], references: [id])
+  quadrantId       Int
+}
+
+model OralFindingOption {
+  id    Int    @id @default(autoincrement())
+  label String @unique
+  findings OralFindingOnVisit[]
+}
+
+model OralFindingOnVisit {
+  id                  Int                 @id @default(autoincrement())
+  generalVisit        GeneralVisitDetails @relation(fields: [generalVisitId], references: [id])
+  generalVisitId      Int
+  toothNumber         String
+  finding             OralFindingOption   @relation(fields: [findingId], references: [id])
+  findingId           Int
+}
+
+model InvestigationTypeOption {
+  id            Int            @id @default(autoincrement())
+  label         String         @unique
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  investigations Investigation[]
+}
+
+model Investigation {
+  id             Int                     @id @default(autoincrement())
+  generalVisit   GeneralVisitDetails     @relation(fields: [generalVisitId], references: [id])
+  generalVisitId Int
+  typeOption     InvestigationTypeOption @relation(fields: [typeOptionId], references: [id])
+  typeOptionId   Int
+  findings       String?
+  toothNumber    String?
+  imagePath      String?
+}
+
+model TreatmentOption {
+  id       Int      @id @default(autoincrement())
+  label    String   @unique
+  category String?
+  plans    TreatmentPlanItem[]
+  doneItems TreatmentDoneItem[]
+}
+
+model TreatmentPlanItem {
+  id            Int                 @id @default(autoincrement())
+  generalVisit  GeneralVisitDetails @relation(fields: [generalVisitId], references: [id])
+  generalVisitId Int
+  treatment      TreatmentOption    @relation(fields: [treatmentId], references: [id])
+  treatmentId    Int
+  toothNumber    String?
+}
+
+model TreatmentDoneItem {
+  id             Int                 @id @default(autoincrement())
+  generalVisit   GeneralVisitDetails @relation(fields: [generalVisitId], references: [id])
+  generalVisitId Int
+  treatment      TreatmentOption     @relation(fields: [treatmentId], references: [id])
+  treatmentId    Int
+  toothNumber    String?
+  notes          String?
+}
+
+model Prescription {
+  id        Int    @id @default(autoincrement())
+  visit     Visit  @relation(fields: [visitId], references: [id])
+  visitId   Int
+  slNo      Int
+  medicine  Medicine @relation(fields: [medicineId], references: [id])
+  medicineId Int
+  timing    String? // e.g., 1-0-1 or SOS
+  quantity  Int?
+  days      Int?
+  notes     String?
+}
+
+model Medicine {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  prescriptions Prescription[]
+}
+
+model OrthodonticPlan {
+  id             Int     @id @default(autoincrement())
+  visit          Visit   @relation(fields: [visitId], references: [id])
+  visitId        Int     @unique
+  bracketType    BracketType
+  totalAmount    Int
+  doctorName     String?
+  consentPath    String?
+  treatments     OrthodonticTreatment[]
+}
+
+model OrthodonticTreatment {
+  id             Int    @id @default(autoincrement())
+  plan           OrthodonticPlan @relation(fields: [planId], references: [id])
+  planId         Int
+  date           DateTime @default(now())
+  treatmentLabel String
+  payment        Payment? 
+  mediaPath      String?
+}
+
+model RootCanalPlan {
+  id             Int    @id @default(autoincrement())
+  visit          Visit  @relation(fields: [visitId], references: [id])
+  visitId        Int    @unique
+  totalAmount    Int
+  consentPath    String?
+  procedures     RootCanalProcedure[]
+}
+
+model RootCanalProcedure {
+  id             Int    @id @default(autoincrement())
+  plan           RootCanalPlan @relation(fields: [planId], references: [id])
+  planId         Int
+  date           DateTime @default(now())
+  procedureLabel String
+  payment        Payment?
+  mediaPath      String?
+}
+
+model LabWork {
+  id                Int      @id @default(autoincrement())
+  patient           Patient  @relation(fields: [patientId], references: [id])
+  patientId         Int
+  labName           String
+  workType          String
+  shade             String?
+  expectedDelivery  DateTime?
+  delivered         Boolean  @default(false)
+  payment           Payment?
+}
+
+model MediaAttachment {
+  id        Int    @id @default(autoincrement())
+  visit     Visit  @relation(fields: [visitId], references: [id])
+  visitId   Int
+  path      String
+  originalName String?
+  mimeType  String?
+  size      Int?
+  type      String? // xray, consent, photo, etc.
+  createdAt DateTime @default(now())
+}
+
+model Payment {
+  id         Int      @id @default(autoincrement())
+  patient    Patient  @relation(fields: [patientId], references: [id])
+  patientId  Int
+  visit      Visit?   @relation(fields: [visitId], references: [id])
+  visitId    Int?
+  amount     Int
+  date       DateTime @default(now())
+  method     String?
+  note       String?
+  // Optional back refs for specific contexts
+  orthoTreatmentId     Int? @unique
+  orthoTreatment       OrthodonticTreatment? @relation(fields: [orthoTreatmentId], references: [id])
+  rootCanalProcedureId Int? @unique
+  rootCanalProcedure   RootCanalProcedure? @relation(fields: [rootCanalProcedureId], references: [id])
+  labWorkId            Int? @unique
+  labWork              LabWork? @relation(fields: [labWorkId], references: [id])
+}
+
+model Staff {
+  id    Int    @id @default(autoincrement())
+  name  String
+  role  String?
+}
+
+// --- Patient History / Allergy Option Models ---
+
+model DentalHistoryOption {
+  id        Int                     @id @default(autoincrement())
+  label     String                  @unique
+  patients  PatientDentalHistory[]
+  active    Boolean                 @default(true)
+  createdAt DateTime                @default(now())
+}
+
+model MedicalHistoryOption {
+  id        Int                      @id @default(autoincrement())
+  label     String                   @unique
+  patients  PatientMedicalHistory[]
+  active    Boolean                  @default(true)
+  createdAt DateTime                 @default(now())
+}
+
+model AllergyOption {
+  id        Int              @id @default(autoincrement())
+  label     String           @unique
+  patients  PatientAllergy[]
+  active    Boolean          @default(true)
+  createdAt DateTime         @default(now())
+}
+
+// Join tables (many-to-many with possible future metadata like notedAt)
+model PatientDentalHistory {
+  id        Int                @id @default(autoincrement())
+  patient   Patient            @relation(fields: [patientId], references: [id])
+  patientId Int
+  option    DentalHistoryOption @relation(fields: [optionId], references: [id])
+  optionId  Int
+  createdAt DateTime            @default(now())
+  @@unique([patientId, optionId])
+}
+
+model PatientMedicalHistory {
+  id        Int                 @id @default(autoincrement())
+  patient   Patient             @relation(fields: [patientId], references: [id])
+  patientId Int
+  option    MedicalHistoryOption @relation(fields: [optionId], references: [id])
+  optionId  Int
+  createdAt DateTime             @default(now())
+  @@unique([patientId, optionId])
+}
+
+model PatientAllergy {
+  id        Int           @id @default(autoincrement())
+  patient   Patient       @relation(fields: [patientId], references: [id])
+  patientId Int
+  option    AllergyOption @relation(fields: [optionId], references: [id])
+  optionId  Int
+  createdAt DateTime       @default(now())
+  @@unique([patientId, optionId])
+}
+
+// A table to hold next display number (or we can derive). Simpler: after create, set displayNumber = id if null, and resequence only on deletions.
