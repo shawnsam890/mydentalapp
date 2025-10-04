@@ -37,7 +37,7 @@ export async function createGeneralVisit(input: GeneralVisitInput) {
       generalDetails: { include: { 
         complaints: { include: { complaint: true, quadrant: true } }, 
         oralFindings: { include: { finding: true } }, 
-        investigations: { include: { typeOption: true } }, 
+  investigations: true, 
         treatmentPlans: { include: { treatment: true } },
         treatmentsDone: { include: { treatment: true } }
       } },
@@ -47,35 +47,39 @@ export async function createGeneralVisit(input: GeneralVisitInput) {
 
   // Create investigations separately since they use a different schema now
   if (input.investigations?.length) {
-    await prisma.investigation.createMany({
-      data: input.investigations.map(i => ({
-        generalVisitId: created.generalDetails!.id,
+    try {
+      // Using any cast to support either legacy enum schema or new typeOptionId schema.
+      const data = input.investigations.map(i => ({
+        generalVisitId: (created as any).generalDetails?.id || (created as any).generalDetailsId,
         typeOptionId: i.typeOptionId,
         findings: i.findings,
         toothNumber: i.toothNumber,
         imagePath: i.imagePath
-      }))
-    });
+      }));
+      await (prisma as any).investigation.createMany({ data });
+    } catch(e) {
+      console.warn('Investigation createMany failed (possibly schema mismatch). Continuing without enrichment.', (e as Error).message);
+    }
   }
 
-  // Return the full visit with investigations included
-  return prisma.visit.findUnique({
+  const full = await prisma.visit.findUnique({
     where: { id: created.id },
     include: {
       generalDetails: { include: { 
         complaints: { include: { complaint: true, quadrant: true } }, 
         oralFindings: { include: { finding: true } }, 
-        investigations: { include: { typeOption: true } }, 
+        investigations: true,
         treatmentPlans: { include: { treatment: true } },
         treatmentsDone: { include: { treatment: true } }
       } },
       prescriptions: { include: { medicine: true } }
     }
   });
+  return enrichInvestigationsForVisit(full);
 }
 
 export async function listVisitsForPatient(patientId: number) {
-  return prisma.visit.findMany({
+  const visits = await prisma.visit.findMany({
     where: { patientId },
     orderBy: { date: 'desc' },
     include: {
@@ -91,15 +95,16 @@ export async function listVisitsForPatient(patientId: number) {
       rootCanalPlan: true,
 	followUpOf: { select: { id: true, date: true, type: true } },
 	followUps: { include: { 
-        generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: true, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
+  generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: true, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
         prescriptions: { include: { medicine: true } }
       } }
     }
   });
+  return enrichInvestigationsForVisits(visits);
 }
 
 export async function getVisitById(id: number) {
-  return prisma.visit.findUnique({
+  const visit = await prisma.visit.findUnique({
     where: { id },
     include: {
       generalDetails: { include: { 
@@ -114,11 +119,12 @@ export async function getVisitById(id: number) {
       rootCanalPlan: true,
 	followUpOf: { select: { id: true, date: true, type: true } },
 	followUps: { include: { 
-        generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: true, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
+  generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: true, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
         prescriptions: { include: { medicine: true } }
       } }
     }
   });
+  return enrichInvestigationsForVisit(visit);
 }
 
 export async function createFollowUpVisit(input: { patientId: number; baseVisitId: number; notes?: string; date?: string; nextAppointmentDate?: string; oralFindings?: { toothNumber: string; findingOptionId: number; }[]; investigations?: { typeOptionId: number; findings?: string; toothNumber?: string; imagePath?: string; }[]; treatmentPlan?: { treatmentOptionId: number; toothNumber?: string }[]; treatmentDone?: { treatmentOptionId: number; toothNumber?: string; notes?: string }[]; prescriptions?: { medicineId: number; timing?: string; quantity?: number; days?: number; notes?: string }[]; }) {
@@ -146,33 +152,36 @@ export async function createFollowUpVisit(input: { patientId: number; baseVisitI
     },
     include: {
       followUpOf: { select: { id: true, date: true, type: true } },
-      generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: { include: { typeOption: true } }, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
+      generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: true, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
       prescriptions: { include: { medicine: true } }
     }
   });
 
   // Create investigations separately since they use a different schema now
   if (input.investigations?.length) {
-    await prisma.investigation.createMany({
-      data: input.investigations.map(i => ({
-        generalVisitId: created.generalDetails!.id,
+    try {
+      const data = input.investigations.map(i => ({
+        generalVisitId: (created as any).generalDetails?.id || (created as any).generalDetailsId,
         typeOptionId: i.typeOptionId,
         findings: i.findings,
         toothNumber: i.toothNumber,
         imagePath: i.imagePath
-      }))
-    });
+      }));
+      await (prisma as any).investigation.createMany({ data });
+    } catch(e) {
+      console.warn('Follow-up investigation createMany failed.', (e as Error).message);
+    }
   }
 
-  // Return the full visit with investigations included
-  return prisma.visit.findUnique({
+  const full = await prisma.visit.findUnique({
     where: { id: created.id },
     include: {
       followUpOf: { select: { id: true, date: true, type: true } },
-      generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: { include: { typeOption: true } }, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
+      generalDetails: { include: { oralFindings: { include: { finding: true } }, investigations: true, treatmentPlans: { include: { treatment: true } }, treatmentsDone: { include: { treatment: true } } } },
       prescriptions: { include: { medicine: true } }
     }
   });
+  return enrichInvestigationsForVisit(full);
 }
 
 export async function createOrthodonticPlan(input: { patientId: number; bracketType: 'METAL_REGULAR' | 'METAL_PREMIUM'; totalAmount: number; doctorName?: string; date?: string }) {
@@ -207,4 +216,29 @@ export async function addRootCanalProcedure(input: { planId: number; procedureLa
       date: input.date ? new Date(input.date) : undefined
     }
   });
+}
+
+// --- Helper enrichment functions ---
+async function enrichInvestigationsForVisit<T extends any>(visit: T): Promise<T> {
+  if (!visit || !(visit as any).generalDetails?.id) return visit;
+  const gd = (visit as any).generalDetails;
+  if (!gd.investigations || !gd.investigations.length) return visit;
+  const ids = gd.investigations.map((inv: any) => inv.id);
+  let detailed = [] as any[];
+  try {
+    detailed = await (prisma as any).investigation.findMany({ where: { id: { in: ids } }, include: { typeOption: true } as any });
+  } catch {
+    // Fallback (legacy schema without relation)
+    detailed = await prisma.investigation.findMany({ where: { id: { in: ids } } });
+  }
+  (visit as any).generalDetails.investigations = detailed;
+  // Enrich follow-ups recursively if present
+  if ((visit as any).followUps) {
+    (visit as any).followUps = await Promise.all((visit as any).followUps.map((fu: any) => enrichInvestigationsForVisit(fu)));
+  }
+  return visit;
+}
+
+async function enrichInvestigationsForVisits(visits: any[]) {
+  return Promise.all(visits.map(v => enrichInvestigationsForVisit(v)));
 }

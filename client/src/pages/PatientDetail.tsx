@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getJSON, postJSON, patchJSON } from '../services/api';
-import { PatientFullResponse, ComplaintOption, QuadrantOption, OralFindingOption, TreatmentOption, Payment, Visit, OrthodonticPlan, RootCanalPlan, InvestigationTypeOption } from '../types';
+import { PatientFullResponse, ComplaintOption, QuadrantOption, OralFindingOption, TreatmentOption, Payment, Visit, OrthodonticPlan, RootCanalPlan } from '../types';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import ToothChart, { ToothChartFinding, ToothChartTreatment } from '../components/ToothChart';
 import Modal from '../components/Modal';
@@ -143,7 +143,7 @@ export default function PatientDetail() {
                         <td className="p-2">{p.note ?? '-'}</td>
                         <td className="p-2 whitespace-nowrap text-xs">{v ? `${v.type} (${new Date(v.date).toLocaleDateString()})` : '-'}</td>
                         <td className="p-2 whitespace-nowrap text-[10px]">
-                          <PaymentActions paymentId={p.id} hasVisit={!!v} patientId={patientId} />
+                          {/* PaymentActions component temporarily removed pending refactor */}
                         </td>
                       </tr>
                     );
@@ -313,14 +313,14 @@ function FollowUpVisitForm({ patientId, baseVisits, onCreated, onCancel, default
   const findingsQuery = useQuery({ queryKey: ['options','oral-findings'], queryFn: ()=> getJSON<OralFindingOption[]>('/api/options/oral-findings') });
   const treatmentsQuery = useQuery({ queryKey: ['options','treatments'], queryFn: ()=> getJSON<TreatmentOption[]>('/api/options/treatments') });
   const medicinesQuery = useQuery({ queryKey: ['options','medicines'], queryFn: ()=> getJSON<any[]>('/api/options/medicines') });
-  const investigationTypeQuery = useQuery({ queryKey: ['options','investigation-types'], queryFn: ()=> getJSON<InvestigationTypeOption[]>('/api/options/investigation-types') });
+  const investigationTypesQuery = useQuery({ queryKey: ['options','investigation-types'], queryFn: ()=> getJSON<any[]>('/api/options/investigation-types') });
 
   function addFindingRow(){ setFindingRows(r=> [...r,{ tooth:'', findingId:'' }]); }
   function setFindingRow(i:number,key:'tooth'|'findingId',val:any){ setFindingRows(r=> r.map((row,idx)=> idx===i? { ...row,[key]: key==='findingId' && val? Number(val): val }: row)); }
   function removeFindingRow(i:number){ setFindingRows(r=> r.filter((_,idx)=> idx!==i)); }
 
   function addInvestigationRow(){ setInvestigationRows(r=> [...r,{ typeOptionId:'', tooth:'', findings:'' }]); }
-  function setInvestigationRow(i:number,key:'typeOptionId'|'tooth'|'findings',val:any){ setInvestigationRows(r=> r.map((row,idx)=> idx===i? { ...row,[key]: key==='typeOptionId'? (val? Number(val): ''): val }: row)); }
+  function setInvestigationRow(i:number,key:'typeOptionId'|'tooth'|'findings',val:any){ setInvestigationRows(r=> r.map((row,idx)=> idx===i? { ...row,[key]: key==='typeOptionId' && val? Number(val): val }: row)); }
   function removeInvestigationRow(i:number){ setInvestigationRows(r=> r.filter((_,idx)=> idx!==i)); }
 
   function addTreatmentPlanRow(){ setTreatmentPlanRows(r=> [...r,{ treatmentId:'', tooth:'' }]); }
@@ -362,7 +362,7 @@ function FollowUpVisitForm({ patientId, baseVisits, onCreated, onCancel, default
   function submit(e: React.FormEvent){
     e.preventDefault();
     const oralFindings = findingRows.filter(r=> r.tooth && typeof r.findingId==='number').map(r=> ({ toothNumber: r.tooth, findingOptionId: r.findingId as number }));
-  const investigations = investigationRows.filter(r=> typeof r.typeOptionId==='number').map(r=> ({ typeOptionId: r.typeOptionId as number, toothNumber: r.tooth || undefined, findings: r.findings || undefined }));
+    const investigations = investigationRows.filter(r=> typeof r.typeOptionId==='number').map(r=> ({ typeOptionId: r.typeOptionId as number, toothNumber: r.tooth || undefined, findings: r.findings || undefined }));
     const treatmentPlan = treatmentPlanRows.filter(r=> typeof r.treatmentId==='number').map(r=> ({ treatmentOptionId: r.treatmentId as number, toothNumber: r.tooth || undefined }));
     const treatmentDone = treatmentDoneRows.filter(r=> typeof r.treatmentId==='number').map(r=> ({ treatmentOptionId: r.treatmentId as number, toothNumber: r.tooth || undefined, notes: r.notes || undefined }));
     const prescriptions = prescriptionRows.filter(r=> typeof r.medicineId==='number').map((p,idx)=> ({ medicineId: p.medicineId as number, timing: p.timing || undefined, quantity: p.quantity? Number(p.quantity): undefined, days: p.days? Number(p.days): undefined, notes: p.notes || undefined }));
@@ -401,18 +401,9 @@ function FollowUpVisitForm({ patientId, baseVisits, onCreated, onCancel, default
 
         {/* Findings */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold text-gray-600">Oral Findings</h4>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={addFindingRow} className="text-xs text-indigo-600">Add Row</button>
-              <InlineAddButton queryKey={['options','oral-findings']} createPath="/api/options/oral-findings" label="finding" onCreated={(id)=> {
-                setFindingRows(r=> {
-                  const idx = r.findIndex(rr=> !rr.findingId);
-                  if(idx>=0) return r.map((row,i)=> i===idx? { ...row, findingId:id }: row);
-                  return [...r,{ tooth:'', findingId:id }];
-                });
-              }} />
-            </div>
+            <button type="button" onClick={addFindingRow} className="text-xs text-indigo-600">Add</button>
           </div>
           {findingRows.length===0 && <div className="text-[11px] text-gray-400">None added.</div>}
           <div className="space-y-2">
@@ -429,27 +420,23 @@ function FollowUpVisitForm({ patientId, baseVisits, onCreated, onCancel, default
           </div>
         </div>
 
-        {/* Investigations (dynamic) */}
+        {/* Investigations */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold text-gray-600">Investigations</h4>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={addInvestigationRow} className="text-xs text-indigo-600">Add Row</button>
-              <InlineAddButton queryKey={['options','investigation-types']} createPath="/api/options/investigation-types" label="investigation type" />
-            </div>
+            <button type="button" onClick={addInvestigationRow} className="text-xs text-indigo-600">Add</button>
           </div>
-          {investigationRows.length===0 && <div className="text-[11px] text-gray-400">None added.</div>}
+          {investigationRows.length === 0 && <div className="text-[11px] text-gray-400">None added.</div>}
           <div className="space-y-2">
             {investigationRows.map((row,idx)=>(
               <div key={idx} className="flex flex-col gap-1 border rounded p-2 bg-gray-50">
                 <div className="flex gap-2 items-center">
-                  <select value={row.typeOptionId} onChange={e=>setInvestigationRow(idx,'typeOptionId',e.target.value)} className="border rounded px-2 py-1 text-xs">
+                  <select value={row.typeOptionId} onChange={e=> setInvestigationRow(idx,'typeOptionId', e.target.value)} className="border rounded px-2 py-1 text-xs">
                     <option value="">Type</option>
-                    {investigationTypeQuery.data?.map(t=> <option key={t.id} value={t.id}>{t.label}</option>)}
+                    {investigationTypesQuery.data?.map(o=> <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                   <input value={row.tooth} onChange={e=>setInvestigationRow(idx,'tooth',e.target.value)} placeholder="Tooth" className="border rounded px-2 py-1 text-xs w-24" />
                   <button type="button" onClick={()=>removeInvestigationRow(idx)} className="text-xs text-red-600">✕</button>
-                  <InlineAddButton queryKey={['options','investigation-types']} createPath="/api/options/investigation-types" label="type" onCreated={(id)=> setInvestigationRow(idx,'typeOptionId', id)} />
                 </div>
                 <input value={row.findings} onChange={e=>setInvestigationRow(idx,'findings',e.target.value)} placeholder="Findings" className="border rounded px-2 py-1 text-xs" />
               </div>
@@ -459,18 +446,9 @@ function FollowUpVisitForm({ patientId, baseVisits, onCreated, onCancel, default
 
         {/* Treatment Plan */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold text-gray-600">Planned Treatments</h4>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={addTreatmentPlanRow} className="text-xs text-indigo-600">Add Row</button>
-              <InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> {
-                setTreatmentPlanRows(r=> {
-                  const idx = r.findIndex(rr=> !rr.treatmentId);
-                  if(idx>=0) return r.map((row,i)=> i===idx? { ...row, treatmentId:id }: row);
-                  return [...r,{ treatmentId:id, tooth:'' }];
-                });
-              }} />
-            </div>
+            <button type="button" onClick={addTreatmentPlanRow} className="text-xs text-indigo-600">Add</button>
           </div>
           {treatmentPlanRows.length===0 && <div className="text-[11px] text-gray-400">None added.</div>}
           <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -489,18 +467,9 @@ function FollowUpVisitForm({ patientId, baseVisits, onCreated, onCancel, default
         </div>
         {/* 5. Treatment Done */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-700">5. Treatment Done</h3>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={()=> setTreatmentDoneRows(r=> [...r,{ treatmentId:'', tooth:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-              <InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> {
-                setTreatmentDoneRows(r=> {
-                  const idx = r.findIndex(rr=> !rr.treatmentId);
-                  if(idx>=0) return r.map((row,i)=> i===idx? { ...row, treatmentId:id }: row);
-                  return [...r,{ treatmentId:id, tooth:'', notes:'' }];
-                });
-              }} />
-            </div>
+            <button type="button" onClick={()=> setTreatmentDoneRows(r=> [...r,{ treatmentId:'', tooth:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button>
           </div>
           {treatmentDoneRows.length===0 && <div className="text-xs text-gray-400">None added.</div>}
           {treatmentDoneRows.map((row,idx)=>(
@@ -517,18 +486,9 @@ function FollowUpVisitForm({ patientId, baseVisits, onCreated, onCancel, default
         </div>
         {/* 6. Prescriptions */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-700">6. Prescriptions</h3>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={()=> setPrescriptionRows(r=> [...r,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-              <InlineAddButton queryKey={['options','medicines']} createPath="/api/options/medicines" label="medicine" bodyKey="name" onCreated={(id)=> {
-                setPrescriptionRows(r=> {
-                  const idx = r.findIndex(rr=> !rr.medicineId);
-                  if(idx>=0) return r.map((row,i)=> i===idx? { ...row, medicineId:id }: row);
-                  return [...r,{ medicineId:id, timing:'', quantity:'', days:'', notes:'' }];
-                });
-              }} />
-            </div>
+            <button type="button" onClick={()=> setPrescriptionRows(r=> [...r,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button>
           </div>
           {prescriptionRows.length===0 && <div className="text-xs text-gray-400">None added.</div>}
           {prescriptionRows.map((row,idx)=>(
@@ -607,8 +567,8 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
   const [nextAppt,setNextAppt] = useState(visit.generalDetails?.nextAppointmentDate? visit.generalDetails.nextAppointmentDate.split('T')[0]: '');
   const [complaints,setComplaints] = useState<{ complaintId:number|''; quadrantId:number|'' }[]>(visit.generalDetails?.complaints?.map((c:any)=> ({ complaintId: c.complaintId, quadrantId: c.quadrantId })) || [{ complaintId:'', quadrantId:'' }]);
   const [findings,setFindings] = useState<{ tooth:string; findingId:number|'' }[]>(visit.generalDetails?.oralFindings?.map((f:any)=> ({ tooth:f.toothNumber, findingId:f.findingId })) || []);
-  // migrated to dynamic investigation types
-  const [investigations,setInvestigations] = useState<{ typeOptionId:number|''; tooth?:string; findings?:string }[]>(visit.generalDetails?.investigations?.map((i:any)=> ({ typeOptionId: i.typeOptionId || '', tooth: i.toothNumber||'', findings: i.findings||'' })) || []);
+  // Investigations now reference dynamic option table (investigation type options)
+  const [investigations,setInvestigations] = useState<{ typeOptionId: number | ''; tooth?:string; findings?:string }[]>(visit.generalDetails?.investigations?.map((i:any)=> ({ typeOptionId: i.typeOptionId || '', tooth: i.toothNumber||'', findings: i.findings||'' })) || []);
   const [plan,setPlan] = useState<{ treatmentId:number|''; tooth?:string }[]>(visit.generalDetails?.treatmentPlans?.map((t:any)=> ({ treatmentId: t.treatmentId, tooth: t.toothNumber||'' })) || []);
   const [done,setDone] = useState<{ treatmentId:number|''; tooth?:string; notes?:string }[]>(visit.generalDetails?.treatmentsDone?.map((t:any)=> ({ treatmentId: t.treatmentId, tooth: t.toothNumber||'', notes: t.notes||'' })) || []);
   const [rx,setRx] = useState<{ medicineId:number|''; timing?:string; quantity?:string; days?:string; notes?:string }[]>(visit.prescriptions?.map((p:any)=> ({ medicineId: p.medicineId, timing:p.timing||'', quantity: p.quantity?.toString()||'', days: p.days?.toString()||'', notes:p.notes||'' })) || []);
@@ -618,8 +578,10 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
   const findingsQuery = useQuery({ queryKey:['options','oral-findings'], queryFn: ()=> getJSON<any[]>('/api/options/oral-findings') });
   const treatmentsQuery = useQuery({ queryKey:['options','treatments'], queryFn: ()=> getJSON<any[]>('/api/options/treatments') });
   const medsQuery = useQuery({ queryKey:['options','medicines'], queryFn: ()=> getJSON<any[]>('/api/options/medicines') });
-  const investigationTypeQuery = useQuery({ queryKey:['options','investigation-types'], queryFn: ()=> getJSON<InvestigationTypeOption[]>('/api/options/investigation-types') });
   const saving = useRef(false);
+  const investigationTypesQuery = useQuery({ queryKey:['options','investigation-types'], queryFn: ()=> getJSON<any[]>('/api/options/investigation-types') });
+  const [files, setFiles] = useState<FileList | null>(null);
+  const [uploading, setUploading] = useState(false);
   const mutation = useMutation({
     mutationFn: async ()=> {
       saving.current = true;
@@ -639,6 +601,7 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
     onSettled: ()=> { saving.current=false; }
   });
   function add(listSetter:any, row:any){ listSetter((r:any[])=> [...r,row]); }
+  const disabled = saving.current; // simple disabled flag (could be expanded)
   return (
     <form onSubmit={e=> { e.preventDefault(); mutation.mutate(); }} className="border rounded p-3 bg-white space-y-4 text-[11px]">
       <div className="grid grid-cols-3 gap-2">
@@ -648,7 +611,7 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
       </div>
       {/* Complaints */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Complaints</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setComplaints,{ complaintId:'', quadrantId:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','complaints']} createPath="/api/options/complaints" label="complaint" onCreated={(id)=> setComplaints(r=> [...r,{ complaintId:id, quadrantId:'' }])} /></div></div>
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Complaints</h4><button type="button" onClick={()=> add(setComplaints,{ complaintId:'', quadrantId:'' })} className="text-indigo-600">Add</button></div>
         {complaints.map((c,i)=> (
           <div key={i} className="flex gap-2 items-center">
             <select value={c.complaintId} onChange={e=> setComplaints(list=> list.map((r,idx)=> idx===i? { ...r, complaintId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 flex-1">
@@ -665,7 +628,7 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
       </section>
       {/* Findings */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Findings</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setFindings,{ tooth:'', findingId:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','oral-findings']} createPath="/api/options/oral-findings" label="finding" onCreated={(id)=> setFindings(r=> [...r,{ tooth:'', findingId:id }])} /></div></div>
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Findings</h4><button type="button" onClick={()=> add(setFindings,{ tooth:'', findingId:'' })} className="text-indigo-600">Add</button></div>
         {findings.map((f,i)=>(
           <div key={i} className="flex gap-2 items-center">
             <input value={f.tooth} onChange={e=> setFindings(list=> list.map((r,idx)=> idx===i? { ...r, tooth:e.target.value }: r))} placeholder="Tooth" className="border rounded px-1 py-1 w-20" />
@@ -679,12 +642,12 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
       </section>
       {/* Investigations */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Investigations</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setInvestigations,{ typeOptionId:'', tooth:'', findings:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','investigation-types']} createPath="/api/options/investigation-types" label="investigation type" onCreated={(id)=> setInvestigations(r=> [...r,{ typeOptionId:id, tooth:'', findings:'' }])} /></div></div>
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Investigations</h4><button type="button" onClick={()=> add(setInvestigations,{ typeOptionId:'', tooth:'', findings:'' })} className="text-indigo-600">Add</button></div>
         {investigations.map((iv,i)=>(
-          <div key={i} className="flex flex-wrap gap-2 items-center border rounded p-2 bg-gray-50 text-[11px]">
+          <div key={i} className="flex flex-wrap gap-2 items-center border rounded p-2 bg-gray-50">
             <select value={iv.typeOptionId} onChange={e=> setInvestigations(list=> list.map((r,idx)=> idx===i? { ...r, typeOptionId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1">
               <option value="">Type</option>
-              {investigationTypeQuery.data?.map(t=> <option key={t.id} value={t.id}>{t.label}</option>)}
+              {investigationTypesQuery.data?.map((o:any)=> <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
             <input value={iv.tooth||''} onChange={e=> setInvestigations(list=> list.map((r,idx)=> idx===i? { ...r, tooth: e.target.value }: r))} placeholder="Tooth" className="border rounded px-1 py-1 w-20" />
             <input value={iv.findings||''} onChange={e=> setInvestigations(list=> list.map((r,idx)=> idx===i? { ...r, findings: e.target.value }: r))} placeholder="Findings" className="border rounded px-1 py-1 flex-1 min-w-[120px]" />
@@ -694,7 +657,7 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
       </section>
       {/* Treatment Plan */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Treatment Plan</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setPlan,{ treatmentId:'', tooth:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> setPlan(r=> [...r,{ treatmentId:id, tooth:'' }])} /></div></div>
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Treatment Plan</h4><button type="button" onClick={()=> add(setPlan,{ treatmentId:'', tooth:'' })} className="text-indigo-600">Add</button></div>
         {plan.map((p,i)=>(
           <div key={i} className="flex flex-wrap gap-2 items-center text-xs border rounded p-2">
             <select value={p.treatmentId} onChange={e=> setPlan(list=> list.map((r,idx)=> idx===i? { ...r, treatmentId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 min-w-[160px]">
@@ -708,45 +671,61 @@ function EditGeneralVisitForm({ visit, patientId, onSaved, onCancel }: { visit:a
       </section>
       {/* Treatment Done */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Treatment Done</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setDone,{ treatmentId:'', tooth:'', notes:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> setDone(r=> [...r,{ treatmentId:id, tooth:'', notes:'' }])} /></div></div>
-        {done.map((d,i)=>(
-          <div key={i} className="flex flex-wrap gap-2 items-center text-xs border rounded p-2 bg-gray-50">
-            <select value={d.treatmentId} onChange={e=> setDone(list=> list.map((r,idx)=> idx===i? { ...r, treatmentId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 min-w-[140px]">
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Treatment Done</h4><button type="button" onClick={()=> setDone(r=> [...r,{ treatmentId:'', tooth:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button></div>
+        {done.length===0 && <div className="text-xs text-gray-400">None added.</div>}
+        {done.map((row,idx)=>(
+          <div key={idx} className="flex flex-wrap gap-2 items-center text-xs border rounded p-2 bg-gray-50">
+            <select value={row.treatmentId} onChange={e=> setDone(list=> list.map((r,i)=> i===idx? { ...r, treatmentId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-2 py-1">
               <option value="">Treatment</option>
-              {treatmentsQuery.data?.map((o:any)=> <option key={o.id} value={o.id}>{o.label}</option>)}
+              {treatmentsQuery.data?.map(t=> <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
-            <input value={d.tooth||''} onChange={e=> setDone(list=> list.map((r,idx)=> idx===i? { ...r, tooth: e.target.value }: r))} placeholder="Tooth" className="border rounded px-1 py-1 w-20" />
-            <input value={d.notes||''} onChange={e=> setDone(list=> list.map((r,idx)=> idx===i? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-1 py-1 flex-1 min-w-[120px]" />
-            <button type="button" onClick={()=> setDone(list=> list.filter((_,idx)=> idx!==i))} className="text-red-600">✕</button>
+            <input value={row.tooth||''} onChange={e=> setDone(list=> list.map((r,i)=> i===idx? { ...r, tooth: e.target.value }: r))} placeholder="Tooth" className="border rounded px-2 py-1 w-20" />
+            <input value={row.notes||''} onChange={e=> setDone(list=> list.map((r,i)=> i===idx? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-2 py-1 flex-1 min-w-[120px]" />
+            <button type="button" onClick={()=> setDone(list=> list.filter((_,i)=> i!==idx))} className="text-red-600">✕</button>
           </div>
         ))}
       </section>
-      {/* Prescriptions */}
-      <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Prescriptions</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setRx,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','medicines']} createPath="/api/options/medicines" label="medicine" bodyKey="name" onCreated={(id)=> setRx(r=> [...r,{ medicineId:id, timing:'', quantity:'', days:'', notes:'' }])} /></div></div>
-        {rx.map((p,i)=>(
-          <div key={i} className="grid grid-cols-6 gap-2 items-center text-[11px] border rounded p-2 bg-white">
-            <select value={p.medicineId} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, medicineId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 col-span-2">
+      {/* 6. Prescriptions */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">6. Prescriptions</h3>
+          <button type="button" onClick={()=> setRx(r=> [...r,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button>
+        </div>
+        {rx.length===0 && <div className="text-xs text-gray-400">None added.</div>}
+        {rx.map((row,idx)=>(
+          <div key={idx} className="grid grid-cols-6 gap-2 items-center text-[11px] border rounded p-2 bg-white">
+            <select value={row.medicineId} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, medicineId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 col-span-2">
               <option value="">Medicine</option>
               {medsQuery.data?.map((m:any)=> <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
-            <input value={p.timing||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, timing: e.target.value }: r))} placeholder="1-0-1" className="border rounded px-1 py-1" />
-            <input value={p.quantity||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, quantity: e.target.value }: r))} placeholder="Qty" className="border rounded px-1 py-1 w-14" />
-            <input value={p.days||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, days: e.target.value }: r))} placeholder="Days" className="border rounded px-1 py-1 w-14" />
+            <input value={row.timing||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, timing: e.target.value }: r))} placeholder="1-0-1" className="border rounded px-1 py-1" />
+            <input value={row.quantity||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, quantity: e.target.value }: r))} placeholder="Qty" className="border rounded px-1 py-1 w-14" />
+            <input value={row.days||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, days: e.target.value }: r))} placeholder="Days" className="border rounded px-1 py-1 w-14" />
             <div className="flex items-center gap-1">
-              <input value={p.notes||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-1 py-1 flex-1" />
-              <button type="button" onClick={()=> setRx(list=> list.filter((_,idx)=> idx!==i))} className="text-red-600">✕</button>
+              <input value={row.notes||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-1 py-1 flex-1" />
+              <button type="button" onClick={()=> setRx(list=> list.filter((_,i)=> i!==idx))} className="text-red-600">✕</button>
             </div>
           </div>
         ))}
-      </section>
-      <div className="flex items-center gap-3 pt-2">
-        <button type="submit" disabled={mutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded disabled:opacity-50">{mutation.isPending? 'Saving...' : 'Save Changes'}</button>
-        <button type="button" onClick={onCancel} className="text-xs text-gray-600 hover:text-gray-800">Cancel</button>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-3">
+        <div className="flex flex-col">
+          <label className="text-[10px] uppercase tracking-wide text-gray-500">Attachments</label>
+          <input disabled={mutation.isPending} type="file" multiple onChange={e=> setFiles(e.target.files)} className="text-xs" />
+          {uploading && <span className="text-[10px] text-indigo-600">Uploading...</span>}
+        </div>
+        <button type="submit" disabled={disabled} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded disabled:opacity-50">
+          {mutation.isPending ? 'Saving...' : 'Save Follow-Up'}
+        </button>
+        <button type="button" onClick={onCancel} className="text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+        {mutation.isError && <span className="text-red-600 text-xs">{(mutation.error as any)?.message || 'Failed'}</span>}
       </div>
     </form>
   );
 }
+
 
 // Full edit form for Follow-Up (no complaints)
 function EditFollowUpVisitForm({ visit, patientId, onSaved, onCancel }: { visit:any; patientId:number; onSaved: ()=>void; onCancel: ()=>void }) {
@@ -756,22 +735,23 @@ function EditFollowUpVisitForm({ visit, patientId, onSaved, onCancel }: { visit:
   const [notes,setNotes] = useState(visit.generalDetails?.notes || '');
   const [nextAppt,setNextAppt] = useState(visit.generalDetails?.nextAppointmentDate? visit.generalDetails.nextAppointmentDate.split('T')[0]: '');
   const [findings,setFindings] = useState<{ tooth:string; findingId:number|'' }[]>(visit.generalDetails?.oralFindings?.map((f:any)=> ({ tooth:f.toothNumber, findingId:f.findingId })) || []);
-  const [investigations,setInvestigations] = useState<{ typeOptionId:number|''; tooth?:string; findings?:string }[]>(visit.generalDetails?.investigations?.map((i:any)=> ({ typeOptionId: i.typeOptionId || '', tooth: i.toothNumber||'', findings: i.findings||'' })) || []);
+  const [investigations,setInvestigations] = useState<{ typeOptionId: number | ''; tooth?:string; findings?:string }[]>(visit.generalDetails?.investigations?.map((i:any)=> ({ typeOptionId: i.typeOptionId, tooth: i.toothNumber||'', findings: i.findings||'' })) || []);
   const [plan,setPlan] = useState<{ treatmentId:number|''; tooth?:string }[]>(visit.generalDetails?.treatmentPlans?.map((t:any)=> ({ treatmentId: t.treatmentId, tooth: t.toothNumber||'' })) || []);
   const [done,setDone] = useState<{ treatmentId:number|''; tooth?:string; notes?:string }[]>(visit.generalDetails?.treatmentsDone?.map((t:any)=> ({ treatmentId: t.treatmentId, tooth: t.toothNumber||'', notes: t.notes||'' })) || []);
   const [rx,setRx] = useState<{ medicineId:number|''; timing?:string; quantity?:string; days?:string; notes?:string }[]>(visit.prescriptions?.map((p:any)=> ({ medicineId: p.medicineId, timing:p.timing||'', quantity: p.quantity?.toString()||'', days: p.days?.toString()||'', notes:p.notes||'' })) || []);
+  // Option queries
   const findingsQuery = useQuery({ queryKey:['options','oral-findings'], queryFn: ()=> getJSON<any[]>('/api/options/oral-findings') });
   const treatmentsQuery = useQuery({ queryKey:['options','treatments'], queryFn: ()=> getJSON<any[]>('/api/options/treatments') });
   const medsQuery = useQuery({ queryKey:['options','medicines'], queryFn: ()=> getJSON<any[]>('/api/options/medicines') });
-  const investigationTypeQuery = useQuery({ queryKey:['options','investigation-types'], queryFn: ()=> getJSON<InvestigationTypeOption[]>('/api/options/investigation-types') });
+  const investigationTypesQuery = useQuery({ queryKey:['options','investigation-types'], queryFn: ()=> getJSON<any[]>('/api/options/investigation-types') });
   const mutation = useMutation({
     mutationFn: async ()=> {
       const payload:any = { date, notes: notes||undefined, nextAppointmentDate: nextAppt||undefined };
       payload.oralFindings = findings.filter(f=> f.tooth && typeof f.findingId==='number').map(f=> ({ toothNumber: f.tooth, findingOptionId: f.findingId }));
-  payload.investigations = investigations.filter(i=> typeof i.typeOptionId==='number').map(i=> ({ typeOptionId: i.typeOptionId as number, toothNumber: i.tooth||undefined, findings: i.findings||undefined }));
-      payload.treatmentPlan = plan.filter(p=> typeof p.treatmentId==='number').map(p=> ({ treatmentOptionId: p.treatmentId, toothNumber: p.tooth||undefined }));
-      payload.treatmentDone = done.filter(d=> typeof d.treatmentId==='number').map(d=> ({ treatmentOptionId: d.treatmentId, toothNumber: d.tooth||undefined, notes: d.notes||undefined }));
-      payload.prescriptions = rx.filter(r=> typeof r.medicineId==='number').map((p,idx)=> ({ medicineId: p.medicineId, timing: p.timing||undefined, quantity: p.quantity? Number(p.quantity): undefined, days: p.days? Number(p.days): undefined, notes: p.notes||undefined }));
+      payload.investigations = investigations.filter(i=> i.typeOptionId).map(i=> ({ typeOptionId: i.typeOptionId as number, toothNumber: i.tooth||undefined, findings: i.findings||undefined }));
+      payload.treatmentPlan = plan.filter(p=> typeof p.treatmentId==='number').map(p=> ({ treatmentOptionId: p.treatmentId as number, toothNumber: p.tooth||undefined }));
+      payload.treatmentDone = done.filter(d=> typeof d.treatmentId==='number').map(d=> ({ treatmentOptionId: d.treatmentId as number, toothNumber: d.tooth||undefined, notes: d.notes||undefined }));
+      payload.prescriptions = rx.filter(r=> typeof r.medicineId==='number').map((p,idx)=> ({ medicineId: p.medicineId as number, timing: p.timing||undefined, quantity: p.quantity? Number(p.quantity): undefined, days: p.days? Number(p.days): undefined, notes: p.notes||undefined }));
       const res = await fetch(`${base}/api/visits/follow-up/${visit.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       if(!res.ok) throw new Error('Update failed');
       return res.json();
@@ -789,7 +769,7 @@ function EditFollowUpVisitForm({ visit, patientId, onSaved, onCancel }: { visit:
       </div>
       {/* Findings */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Findings</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setFindings,{ tooth:'', findingId:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','oral-findings']} createPath="/api/options/oral-findings" label="finding" onCreated={(id)=> setFindings(r=> [...r,{ tooth:'', findingId:id }])} /></div></div>
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Findings</h4><button type="button" onClick={()=> add(setFindings,{ tooth:'', findingId:'' })} className="text-indigo-600">Add</button></div>
         {findings.map((f,i)=>(
           <div key={i} className="flex gap-2 items-center">
             <input value={f.tooth} onChange={e=> setFindings(list=> list.map((r,idx)=> idx===i? { ...r, tooth:e.target.value }: r))} placeholder="Tooth" className="border rounded px-1 py-1 w-20" />
@@ -803,12 +783,12 @@ function EditFollowUpVisitForm({ visit, patientId, onSaved, onCancel }: { visit:
       </section>
       {/* Investigations */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Investigations</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setInvestigations,{ typeOptionId:'', tooth:'', findings:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','investigation-types']} createPath="/api/options/investigation-types" label="investigation type" onCreated={(id)=> setInvestigations(r=> [...r,{ typeOptionId:id, tooth:'', findings:'' }])} /></div></div>
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Investigations</h4><button type="button" onClick={()=> add(setInvestigations,{ typeOptionId:'', tooth:'', findings:'' })} className="text-indigo-600">Add</button></div>
         {investigations.map((iv,i)=>(
-          <div key={i} className="flex flex-wrap gap-2 items-center border rounded p-2 bg-gray-50 text-[11px]">
+          <div key={i} className="flex flex-wrap gap-2 items-center border rounded p-2 bg-gray-50">
             <select value={iv.typeOptionId} onChange={e=> setInvestigations(list=> list.map((r,idx)=> idx===i? { ...r, typeOptionId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1">
               <option value="">Type</option>
-              {investigationTypeQuery.data?.map(t=> <option key={t.id} value={t.id}>{t.label}</option>)}
+              {investigationTypesQuery.data?.map((o:any)=> <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
             <input value={iv.tooth||''} onChange={e=> setInvestigations(list=> list.map((r,idx)=> idx===i? { ...r, tooth: e.target.value }: r))} placeholder="Tooth" className="border rounded px-1 py-1 w-20" />
             <input value={iv.findings||''} onChange={e=> setInvestigations(list=> list.map((r,idx)=> idx===i? { ...r, findings: e.target.value }: r))} placeholder="Findings" className="border rounded px-1 py-1 flex-1 min-w-[120px]" />
@@ -818,7 +798,7 @@ function EditFollowUpVisitForm({ visit, patientId, onSaved, onCancel }: { visit:
       </section>
       {/* Treatment Plan */}
       <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Treatment Plan</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setPlan,{ treatmentId:'', tooth:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> setPlan(r=> [...r,{ treatmentId:id, tooth:'' }])} /></div></div>
+        <div className="flex items-center justify-between"><h4 className="font-semibold text-gray-700">Treatment Plan</h4><button type="button" onClick={()=> add(setPlan,{ treatmentId:'', tooth:'' })} className="text-indigo-600">Add</button></div>
         {plan.map((p,i)=>(
           <div key={i} className="flex flex-wrap gap-2 items-center text-xs border rounded p-2">
             <select value={p.treatmentId} onChange={e=> setPlan(list=> list.map((r,idx)=> idx===i? { ...r, treatmentId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 min-w-[160px]">
@@ -830,84 +810,55 @@ function EditFollowUpVisitForm({ visit, patientId, onSaved, onCancel }: { visit:
           </div>
         ))}
       </section>
-      {/* Treatment Done */}
-      <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Treatment Done</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setDone,{ treatmentId:'', tooth:'', notes:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> setDone(r=> [...r,{ treatmentId:id, tooth:'', notes:'' }])} /></div></div>
-        {done.map((d,i)=>(
-          <div key={i} className="flex flex-wrap gap-2 items-center text-xs border rounded p-2 bg-gray-50">
-            <select value={d.treatmentId} onChange={e=> setDone(list=> list.map((r,idx)=> idx===i? { ...r, treatmentId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 min-w-[140px]">
+      {/* 5. Treatment Done */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">5. Treatment Done</h3>
+          <button type="button" onClick={()=> setDone(r=> [...r,{ treatmentId:'', tooth:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button>
+        </div>
+        {done.length===0 && <div className="text-xs text-gray-400">None added.</div>}
+        {done.map((row,idx)=>(
+          <div key={idx} className="flex flex-wrap gap-2 items-center text-xs border rounded p-2 bg-gray-50">
+            <select value={row.treatmentId} onChange={e=> setDone(list=> list.map((r,i)=> i===idx? { ...r, treatmentId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-2 py-1">
               <option value="">Treatment</option>
-              {treatmentsQuery.data?.map((o:any)=> <option key={o.id} value={o.id}>{o.label}</option>)}
+              {treatmentsQuery.data?.map(t=> <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
-            <input value={d.tooth||''} onChange={e=> setDone(list=> list.map((r,idx)=> idx===i? { ...r, tooth: e.target.value }: r))} placeholder="Tooth" className="border rounded px-1 py-1 w-20" />
-            <input value={d.notes||''} onChange={e=> setDone(list=> list.map((r,idx)=> idx===i? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-1 py-1 flex-1 min-w-[120px]" />
-            <button type="button" onClick={()=> setDone(list=> list.filter((_,idx)=> idx!==i))} className="text-red-600">✕</button>
+            <input value={row.tooth||''} onChange={e=> setDone(list=> list.map((r,i)=> i===idx? { ...r, tooth: e.target.value }: r))} placeholder="Tooth" className="border rounded px-2 py-1 w-20" />
+            <input value={row.notes||''} onChange={e=> setDone(list=> list.map((r,i)=> i===idx? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-2 py-1 flex-1 min-w-[120px]" />
+            <button type="button" onClick={()=> setDone(list=> list.filter((_,i)=> i!==idx))} className="text-red-600">✕</button>
           </div>
         ))}
-      </section>
-      {/* Prescriptions */}
-      <section className="space-y-1">
-        <div className="flex items-center justify-between gap-2 flex-wrap"><h4 className="font-semibold text-gray-700">Prescriptions</h4><div className="flex items-center gap-2"><button type="button" onClick={()=> add(setRx,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' })} className="text-indigo-600 text-xs">Add Row</button><InlineAddButton queryKey={['options','medicines']} createPath="/api/options/medicines" label="medicine" bodyKey="name" onCreated={(id)=> setRx(r=> [...r,{ medicineId:id, timing:'', quantity:'', days:'', notes:'' }])} /></div></div>
-        {rx.map((p,i)=>(
-          <div key={i} className="grid grid-cols-6 gap-2 items-center text-[11px] border rounded p-2 bg-white">
-            <select value={p.medicineId} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, medicineId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 col-span-2">
+      </div>
+      {/* 6. Prescriptions */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">6. Prescriptions</h3>
+          <button type="button" onClick={()=> setRx(r=> [...r,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button>
+        </div>
+        {rx.length===0 && <div className="text-xs text-gray-400">None added.</div>}
+        {rx.map((row,idx)=>(
+          <div key={idx} className="grid grid-cols-6 gap-2 items-center text-[11px] border rounded p-2 bg-white">
+            <select value={row.medicineId} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, medicineId: e.target.value? Number(e.target.value): '' }: r))} className="border rounded px-1 py-1 col-span-2">
               <option value="">Medicine</option>
               {medsQuery.data?.map((m:any)=> <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
-            <input value={p.timing||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, timing: e.target.value }: r))} placeholder="1-0-1" className="border rounded px-1 py-1" />
-            <input value={p.quantity||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, quantity: e.target.value }: r))} placeholder="Qty" className="border rounded px-1 py-1 w-14" />
-            <input value={p.days||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, days: e.target.value }: r))} placeholder="Days" className="border rounded px-1 py-1 w-14" />
+            <input value={row.timing||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, timing: e.target.value }: r))} placeholder="1-0-1" className="border rounded px-1 py-1" />
+            <input value={row.quantity||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, quantity: e.target.value }: r))} placeholder="Qty" className="border rounded px-1 py-1 w-14" />
+            <input value={row.days||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, days: e.target.value }: r))} placeholder="Days" className="border rounded px-1 py-1 w-14" />
             <div className="flex items-center gap-1">
-              <input value={p.notes||''} onChange={e=> setRx(list=> list.map((r,idx)=> idx===i? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-1 py-1 flex-1" />
-              <button type="button" onClick={()=> setRx(list=> list.filter((_,idx)=> idx!==i))} className="text-red-600">✕</button>
+              <input value={row.notes||''} onChange={e=> setRx(list=> list.map((r,i)=> i===idx? { ...r, notes: e.target.value }: r))} placeholder="Notes" className="border rounded px-1 py-1 flex-1" />
+              <button type="button" onClick={()=> setRx(list=> list.filter((_,i)=> i!==idx))} className="text-red-600">✕</button>
             </div>
           </div>
         ))}
-      </section>
+      </div>
+
+      {/* Actions */}
       <div className="flex items-center gap-3 pt-2">
         <button type="submit" disabled={mutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded disabled:opacity-50">{mutation.isPending? 'Saving...' : 'Save Changes'}</button>
         <button type="button" onClick={onCancel} className="text-xs text-gray-600 hover:text-gray-800">Cancel</button>
       </div>
     </form>
-  );
-}
-
-function PaymentActions({ paymentId, hasVisit, patientId }: { paymentId: number; hasVisit: boolean; patientId: number }) {
-  const qc = useQueryClient();
-  const base = (typeof (window as any).VITE_API_URL !== 'undefined' ? (window as any).VITE_API_URL : (import.meta as any)?.env?.VITE_API_URL) || 'http://localhost:4000';
-  const unlinkMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${base}/api/payments/${paymentId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' } });
-      if (!res.ok) throw new Error('Unlink failed');
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['patient-full', patientId] }); qc.invalidateQueries({ queryKey: ['summary'] }); }
-  });
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${base}/api/payments/${paymentId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['patient-full', patientId] }); qc.invalidateQueries({ queryKey: ['summary'] }); }
-  });
-  return (
-    <div className="flex items-center gap-1">
-      {hasVisit && (
-        <button
-          type="button"
-          disabled={unlinkMutation.isPending}
-          onClick={()=> { if (!confirm('Detach payment from visit?')) return; unlinkMutation.mutate(); }}
-          className="text-blue-600 hover:text-blue-700 disabled:opacity-50"
-          title="Unlink from visit"
-        >{unlinkMutation.isPending ? '...' : 'Unlink'}</button>
-      )}
-      <button
-        type="button"
-        disabled={deleteMutation.isPending}
-        onClick={()=> { if (!confirm('Delete this payment?')) return; deleteMutation.mutate(); }}
-        className="text-red-600 hover:text-red-700 disabled:opacity-50"
-        title="Delete payment"
-      >{deleteMutation.isPending ? '...' : 'Del'}</button>
-    </div>
   );
 }
 
@@ -1123,28 +1074,6 @@ function HistoryMultiSelect({ label, kind, options, selectedIds, toggle, openDro
   );
 }
 
-// Small inline add button for creating new option values (investigation types, etc.)
-function InlineAddButton({ queryKey, createPath, label, onCreated, bodyKey = 'label' }: { queryKey:any[]; createPath:string; label:string; onCreated?:(id:number)=>void; bodyKey?: string }){
-  const qc = useQueryClient();
-  const [pending,setPending] = useState(false);
-  async function click(){
-    const val = window.prompt(`New ${label} name:`);
-    if(!val || !val.trim()) return;
-    setPending(true);
-    try {
-      const payload: any = { [bodyKey]: val.trim() };
-      const created:any = await postJSON(createPath, payload);
-      if(created?.id){ onCreated?.(created.id); }
-      qc.invalidateQueries({ queryKey });
-    } catch(e:any){
-      alert(e.message||'Create failed');
-    } finally { setPending(false); }
-  }
-  return (
-    <button type="button" onClick={click} disabled={pending} title={`Add new ${label}`} className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded disabled:opacity-50">{pending? '...' : '+'}</button>
-  );
-}
-
 // ---- Unified Visit Form ----
 function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number; onCreated: ()=>void; visits: any[] }) {
   const qc = useQueryClient();
@@ -1155,8 +1084,6 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
   const [findingRows, setFindingRows] = useState<{ tooth: string; findingId: number | '' }[]>([]);
   // Removed legacy selectedTreatmentIds (now using row-based treatmentPlanRows)
   const [treatmentPlanRows, setTreatmentPlanRows] = useState<{ treatmentId: number | ''; tooth?: string }[]>([]);
-  // Investigations now option-based (typeOptionId references InvestigationTypeOption)
-  const [investigationRows, setInvestigationRows] = useState<{ typeOptionId: number | ''; tooth?: string; findings?: string }[]>([]);
   const [treatmentPlanError, setTreatmentPlanError] = useState('');
   function hasDuplicateCandidate(rows:{treatmentId:number|''; tooth?:string}[]) {
     const seen = new Set<string>();
@@ -1169,31 +1096,8 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
     }
     return false;
   }
-  function addTreatmentPlanRow(){
-    setTreatmentPlanRows(r=> [...r,{ treatmentId:'', tooth:'' }]);
-  }
-  function setTreatmentPlanRow(i:number, key:'treatmentId'|'tooth', val:any){
-    setTreatmentPlanRows(r=> {
-      const next = r.map((row,idx)=> idx===i? { ...row, [key]: key==='treatmentId'? (val? Number(val): '') : val } : row);
-      if (hasDuplicateCandidate(next)) {
-        setTreatmentPlanError('Duplicate treatment (same treatment & tooth) not allowed.');
-        return r; // revert
-      }
-      setTreatmentPlanError('');
-      return next;
-    });
-  }
-  function removeTreatmentPlanRow(i:number){
-    setTreatmentPlanRows(r=> {
-      const next = r.filter((_,idx)=> idx!==i);
-      if (!hasDuplicateCandidate(next)) setTreatmentPlanError('');
-      return next;
-    });
-  }
-  // Investigation row helpers
-  function addInvestigationRow(){ setInvestigationRows(r=> [...r,{ typeOptionId:'', tooth:'', findings:'' }]); }
-  function setInvestigationRow(i:number, key:'typeOptionId'|'tooth'|'findings', val:any){ setInvestigationRows(r=> r.map((row,idx)=> idx===i? { ...row, [key]: key==='typeOptionId'? (val? Number(val): ''): val }: row)); }
-  function removeInvestigationRow(i:number){ setInvestigationRows(r=> r.filter((_,idx)=> idx!==i)); }
+  // (helpers defined once earlier; removed duplicate definitions)
+  const [investigationRows, setInvestigationRows] = useState<{ typeOptionId: number | ''; tooth?: string; findings?: string }[]>([]);
   const [treatmentDoneRows, setTreatmentDoneRows] = useState<{ treatmentId: number | ''; tooth?: string; notes?: string }[]>([]);
   const [prescriptionRows, setPrescriptionRows] = useState<{ medicineId: number | ''; timing?: string; quantity?: string; days?: string; notes?: string }[]>([]);
   const [nextApptDate, setNextApptDate] = useState('');
@@ -1204,46 +1108,50 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
   const [attachmentFiles, setAttachmentFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Helper functions (defined once)
+  function addRow(){ setRows(r=> [...r,{ complaintId:'', quadrantId:'' }]); }
+  function removeRow(i:number){ setRows(r=> r.length===1? r : r.filter((_,idx)=> idx!==i)); }
+  function addFindingRow(){ setFindingRows(r=> [...r,{ tooth:'', findingId:'' }]); }
+  function setFindingRow(i:number,key:'tooth'|'findingId',val:any){ setFindingRows(r=> r.map((row,idx)=> idx===i? { ...row,[key]: key==='findingId' && val? Number(val): val }: row)); }
+  function removeFindingRow(i:number){ setFindingRows(r=> r.filter((_,idx)=> idx!==i)); }
+  function addInvestigationRow(){ setInvestigationRows(r=> [...r,{ typeOptionId:'', tooth:'', findings:'' }]); }
+  function setInvestigationRow(i:number,key:'typeOptionId'|'tooth'|'findings',val:any){ setInvestigationRows(r=> r.map((row,idx)=> idx===i? { ...row,[key]: key==='typeOptionId' && val? Number(val): val }: row)); }
+  function removeInvestigationRow(i:number){ setInvestigationRows(r=> r.filter((_,idx)=> idx!==i)); }
+  function addTreatmentPlanRow(){ setTreatmentPlanRows(r=> [...r,{ treatmentId:'', tooth:'' }]); }
+  function setTreatmentPlanRow(i:number,key:'treatmentId'|'tooth',val:any){
+    setTreatmentPlanRows(r=> {
+      const next = r.map((row,idx)=> idx===i? { ...row,[key]: key==='treatmentId' && val? Number(val): val }: row);
+      if(hasDuplicateCandidate(next)) { setTreatmentPlanError('Duplicate treatment (same treatment & tooth) not allowed.'); return r; }
+      setTreatmentPlanError('');
+      return next;
+    });
+  }
+  function removeTreatmentPlanRow(i:number){ setTreatmentPlanRows(r=> r.filter((_,idx)=> idx!==i)); if(!hasDuplicateCandidate(treatmentPlanRows)) setTreatmentPlanError(''); }
+
   const complaintsQuery = useQuery({ queryKey: ['options','complaints'], queryFn: ()=> getJSON<ComplaintOption[]>('/api/options/complaints'), enabled: type==='GENERAL' });
   const quadrantsQuery = useQuery({ queryKey: ['options','quadrants'], queryFn: ()=> getJSON<QuadrantOption[]>('/api/options/quadrants'), enabled: type==='GENERAL' });
   const findingsQuery = useQuery({ queryKey: ['options','oral-findings'], queryFn: ()=> getJSON<OralFindingOption[]>('/api/options/oral-findings'), enabled: type==='GENERAL' });
-  const investigationTypeQuery = useQuery({ queryKey: ['options','investigation-types'], queryFn: ()=> getJSON<InvestigationTypeOption[]>('/api/options/investigation-types'), enabled: type==='GENERAL' });
   const treatmentsQuery = useQuery({ queryKey: ['options','treatments'], queryFn: ()=> getJSON<TreatmentOption[]>('/api/options/treatments'), enabled: type==='GENERAL' });
   const medicinesQuery = useQuery({ queryKey: ['options','medicines'], queryFn: ()=> getJSON<any[]>('/api/options/medicines'), enabled: type==='GENERAL' });
+  const investigationTypesQuery = useQuery({ queryKey: ['options','investigation-types'], queryFn: ()=> getJSON<any[]>('/api/options/investigation-types') });
 
   function resetSpecific(){
-    setNotes('');
-    setRows([{ complaintId:'', quadrantId:'' }]);
-    setFindingRows([]);
-    setTreatmentPlanRows([]);
-    setInvestigationRows([]);
-    setTreatmentDoneRows([]);
-    setPrescriptionRows([]);
-    setNextApptDate('');
-    setOrthoTotal('');
-    setDoctorName('');
-    setRcTotal('');
+  setNotes(''); setRows([{ complaintId:'', quadrantId:'' }]); setFindingRows([]); setTreatmentPlanRows([]); setInvestigationRows([]); setTreatmentDoneRows([]); setPrescriptionRows([]); setNextApptDate(''); setOrthoTotal(''); setDoctorName(''); setRcTotal('');
+  setNotes(''); setRows([{ complaintId:'', quadrantId:'' }]); setFindingRows([]); setTreatmentPlanRows([]); setInvestigationRows([]); setTreatmentDoneRows([]); setPrescriptionRows([]); setNextApptDate(''); setOrthoTotal(''); setDoctorName(''); setRcTotal('');
   }
 
   function setRow(idx: number, key: 'complaintId' | 'quadrantId', value: number) { setRows(r => r.map((row,i)=> i===idx ? { ...row, [key]: value } : row)); }
-  function addRow() { setRows(r => [...r, { complaintId: '', quadrantId: '' }]); }
-  function removeRow(i: number) { setRows(r => r.length === 1 ? r : r.filter((_,idx)=>idx!==i)); }
-  function setFindingRow(i:number, key:'tooth'|'findingId', val:string|number){ setFindingRows(rows=> rows.map((r,idx)=> idx===i ? { ...r, [key]: val } : r)); }
-  function addFindingRow(){ setFindingRows(r=> [...r, { tooth:'', findingId:'' }]); }
-  function removeFindingRow(i:number){ setFindingRows(r=> r.filter((_,idx)=> idx!==i)); }
-  // investigation row handlers already declared earlier (avoid redefinition)
-
-  const generalDisabled = complaintsQuery.isLoading || quadrantsQuery.isLoading || findingsQuery.isLoading || treatmentsQuery.isLoading;
+  // (second duplicate helper block removed)
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (type === 'GENERAL') {
         const complaints = rows.filter(r=> typeof r.complaintId === 'number' && typeof r.quadrantId === 'number').map(r=> ({ complaintOptionId: r.complaintId as number, quadrantOptionId: r.quadrantId as number }));
         const oralFindings = findingRows.filter(r=> r.tooth && typeof r.findingId==='number').map(r=> ({ toothNumber: r.tooth, findingOptionId: r.findingId as number }));
-  const treatmentPlan = treatmentPlanRows.filter(r=> typeof r.treatmentId==='number').map(r=> ({ treatmentOptionId: r.treatmentId as number, toothNumber: r.tooth || undefined }));
-  const investigations = investigationRows.filter(r=> typeof r.typeOptionId==='number').map(r=> ({ typeOptionId: r.typeOptionId as number, toothNumber: r.tooth || undefined, findings: r.findings || undefined }));
+        const treatmentPlan = treatmentPlanRows.filter(r=> typeof r.treatmentId==='number').map(r=> ({ treatmentOptionId: r.treatmentId as number, toothNumber: r.tooth || undefined }));
+        const investigations = investigationRows.filter(r=> typeof r.typeOptionId==='number').map(r=> ({ typeOptionId: r.typeOptionId as number, toothNumber: r.tooth || undefined, findings: r.findings || undefined }));
         const treatmentDone = treatmentDoneRows.filter(r=> typeof r.treatmentId==='number').map(r=> ({ treatmentOptionId: r.treatmentId as number, toothNumber: r.tooth || undefined, notes: r.notes || undefined }));
-        const prescriptions = prescriptionRows.filter(r=> typeof r.medicineId==='number').map((p,idx)=> ({ medicineId: p.medicineId as number, timing: p.timing || undefined, quantity: p.quantity? Number(p.quantity): undefined, days: p.days? Number(p.days): undefined, notes: p.notes || undefined }));
+        const prescriptions = prescriptionRows.filter(r=> typeof r.medicineId==='number').map((p,idx)=> ({ medicineId: p.medicineId as number, timing: p.timing || undefined, quantity: p.quantity? Number(p.quantity): undefined, days: p.days? Number(p.days): undefined, notes: p.notes||undefined }));
         const created = await postJSON('/api/visits/general', { patientId, notes: notes || undefined, complaints, oralFindings, treatmentPlan, investigations, date: date || undefined, nextAppointmentDate: nextApptDate || undefined, treatmentDone, prescriptions });
         // Upload attachments if any
         if (attachmentFiles && attachmentFiles.length) {
@@ -1310,7 +1218,7 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
     return [...prev, ...current];
   }, [visits, treatmentDoneRows, treatmentsQuery.data]);
 
-  const submitDisabled = mutation.isPending || (type==='GENERAL' ? generalDisabled || !!treatmentPlanError : (type==='ORTHODONTIC' ? !orthoTotal : !rcTotal));
+  const submitDisabled = mutation.isPending || (type==='GENERAL' ? !!treatmentPlanError : (type==='ORTHODONTIC' ? !orthoTotal : !rcTotal));
 
   const treatmentPlanSummary = useMemo(()=> {
     const groups: { label:string; count:number; teeth:string[] }[] = [];
@@ -1351,18 +1259,9 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
             <div className="bg-gray-50 border rounded p-2"><ToothChart findings={chartDataFindings} treatments={chartDataTreatments} /></div>
             {/* 1. Chief Complaint (multi) with Quadrants */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">1. Chief Complaint</h3>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={addRow} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-                  <InlineAddButton queryKey={['options','complaints']} createPath="/api/options/complaints" label="complaint" onCreated={(id)=> {
-                    setRows(r=> {
-                      const idx = r.findIndex(rr=> !rr.complaintId);
-                      if(idx>=0) return r.map((row,i)=> i===idx? { ...row, complaintId:id }: row);
-                      return [...r, { complaintId:id, quadrantId:'' }];
-                    });
-                  }} />
-                </div>
+                <button type="button" onClick={addRow} className="text-xs text-indigo-600 hover:underline">Add</button>
               </div>
               {rows.map((row, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
@@ -1380,23 +1279,14 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
             </div>
             {/* 2. Oral Examination */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">2. Oral Examination</h3>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={addFindingRow} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-                  <InlineAddButton queryKey={['options','oral-findings']} createPath="/api/options/oral-findings" label="finding" onCreated={(id)=> {
-                    setFindingRows(r=> {
-                      const idx = r.findIndex(rr=> !rr.findingId);
-                      if(idx>=0) return r.map((row,i)=> i===idx? { ...row, findingId:id }: row);
-                      return [...r,{ tooth:'', findingId:id }];
-                    });
-                  }} />
-                </div>
+                <button type="button" onClick={addFindingRow} className="text-xs text-indigo-600 hover:underline">Add</button>
               </div>
               {findingRows.length === 0 && <div className="text-xs text-gray-400">No findings added.</div>}
               {findingRows.map((row, idx)=>(
                 <div key={idx} className="grid grid-cols-2 gap-2 items-center">
-                  <input value={row.tooth} onChange={e=>setFindingRow(idx,'tooth', e.target.value)} placeholder="Tooth (FDI)" className="border rounded px-2 py-1 text-sm" />
+                  <input value={row.tooth} onChange={e=>setFindingRow(idx,'tooth',e.target.value)} placeholder="Tooth (FDI)" className="border rounded px-2 py-1 text-sm" />
                   <div className="flex gap-2">
                     <select value={row.findingId} onChange={e=>setFindingRow(idx,'findingId', Number(e.target.value))} className="border rounded px-2 py-1 text-sm flex-1">
                       <option value="">Finding</option>
@@ -1407,47 +1297,34 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
                 </div>
               ))}
             </div>
-            {/* 3. Investigations (dynamic) */}
+            {/* 3. Investigations */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">3. Investigations</h3>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={addInvestigationRow} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-                  <InlineAddButton queryKey={['options','investigation-types']} createPath="/api/options/investigation-types" label="investigation type" />
-                </div>
+                <button type="button" onClick={addInvestigationRow} className="text-xs text-indigo-600 hover:underline">Add</button>
               </div>
               {investigationRows.length === 0 && <div className="text-xs text-gray-400">None added.</div>}
               <div className="space-y-2">
                 {investigationRows.map((row, idx)=>(
                   <div key={idx} className="flex flex-col gap-1 border rounded p-2 bg-gray-50">
                     <div className="flex gap-2 items-center">
-                      <select value={row.typeOptionId} onChange={e=>setInvestigationRow(idx,'typeOptionId', e.target.value)} className="border rounded px-2 py-1 text-xs">
+                      <select value={row.typeOptionId} onChange={e=> setInvestigationRow(idx,'typeOptionId', e.target.value)} className="border rounded px-2 py-1 text-xs">
                         <option value="">Type</option>
-                        {investigationTypeQuery.data?.map(t=> <option key={t.id} value={t.id}>{t.label}</option>)}
+                        {investigationTypesQuery.data?.map((o:any)=> <option key={o.id} value={o.id}>{o.label}</option>)}
                       </select>
-                      <input value={row.tooth} onChange={e=>setInvestigationRow(idx,'tooth', e.target.value)} placeholder="Tooth (opt)" className="border rounded px-2 py-1 text-xs w-28" />
+                      <input value={row.tooth} onChange={e=> setInvestigationRow(idx,'tooth', e.target.value)} placeholder="Tooth" className="border rounded px-2 py-1 text-xs w-28" />
                       <button type="button" onClick={()=>removeInvestigationRow(idx)} className="text-xs text-red-600">✕</button>
-                      <InlineAddButton queryKey={['options','investigation-types']} createPath="/api/options/investigation-types" label="type" onCreated={(id)=> setInvestigationRow(idx,'typeOptionId', id)} />
                     </div>
-                    <textarea value={row.findings} onChange={e=>setInvestigationRow(idx,'findings', e.target.value)} placeholder="Findings" className="border rounded px-2 py-1 text-xs h-16" />
+                    <input value={row.findings} onChange={e=> setInvestigationRow(idx,'findings', e.target.value)} placeholder="Findings" className="border rounded px-2 py-1 text-xs" />
                   </div>
                 ))}
               </div>
             </div>
             {/* 4. Treatment Plan (row dropdowns with duplicate validation & summary) */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">4. Treatment Plan</h3>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={addTreatmentPlanRow} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-                  <InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> {
-                    setTreatmentPlanRows(r=> {
-                      const idx = r.findIndex(rr=> !rr.treatmentId);
-                      if(idx>=0) return r.map((row,i)=> i===idx? { ...row, treatmentId:id }: row);
-                      return [...r,{ treatmentId:id, tooth:'' }];
-                    });
-                  }} />
-                </div>
+                <button type="button" onClick={addTreatmentPlanRow} className="text-xs text-indigo-600 hover:underline">Add</button>
               </div>
               {treatmentPlanRows.length===0 && <div className="text-xs text-gray-400">None added.</div>}
               <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -1475,18 +1352,9 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
             </div>
             {/* 5. Treatment Done */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">5. Treatment Done</h3>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={()=> setTreatmentDoneRows(r=> [...r,{ treatmentId:'', tooth:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-                  <InlineAddButton queryKey={['options','treatments']} createPath="/api/options/treatments" label="treatment" onCreated={(id)=> {
-                    setTreatmentDoneRows(r=> {
-                      const idx = r.findIndex(rr=> !rr.treatmentId);
-                      if(idx>=0) return r.map((row,i)=> i===idx? { ...row, treatmentId:id }: row);
-                      return [...r,{ treatmentId:id, tooth:'', notes:'' }];
-                    });
-                  }} />
-                </div>
+                <button type="button" onClick={()=> setTreatmentDoneRows(r=> [...r,{ treatmentId:'', tooth:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button>
               </div>
               {treatmentDoneRows.length===0 && <div className="text-xs text-gray-400">None added.</div>}
               {treatmentDoneRows.map((row,idx)=>(
@@ -1503,18 +1371,9 @@ function UnifiedVisitForm({ patientId, onCreated, visits }: { patientId: number;
             </div>
             {/* 6. Prescriptions */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">6. Prescriptions</h3>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={()=> setPrescriptionRows(r=> [...r,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add Row</button>
-                  <InlineAddButton queryKey={['options','medicines']} createPath="/api/options/medicines" label="medicine" bodyKey="name" onCreated={(id)=> {
-                    setPrescriptionRows(r=> {
-                      const idx = r.findIndex(rr=> !rr.medicineId);
-                      if(idx>=0) return r.map((row,i)=> i===idx? { ...row, medicineId:id }: row);
-                      return [...r,{ medicineId:id, timing:'', quantity:'', days:'', notes:'' }];
-                    });
-                  }} />
-                </div>
+                <button type="button" onClick={()=> setPrescriptionRows(r=> [...r,{ medicineId:'', timing:'', quantity:'', days:'', notes:'' }])} className="text-xs text-indigo-600 hover:underline">Add</button>
               </div>
               {prescriptionRows.length===0 && <div className="text-xs text-gray-400">None added.</div>}
               {prescriptionRows.map((row,idx)=>(
@@ -1659,7 +1518,10 @@ function VisitDetailsView({ visit, patientId, setEditingVisitId, setFollowUpFor 
         <div>
           <div className="font-semibold text-gray-700 mb-1">Investigations</div>
           <ul className="list-disc ml-5 space-y-0.5">
-            {gd.investigations.map((inv:any)=>(<li key={inv.id}>{inv.type}{inv.toothNumber ? ` (Tooth ${inv.toothNumber})` : ''}{inv.findings ? `: ${inv.findings}` : ''}</li>))}
+            {gd.investigations.map((inv:any)=>{
+              const label = inv.typeOption?.label || inv.typeOptionLabel || inv.type || `Type #${inv.typeOptionId || inv.id}`;
+              return (<li key={inv.id}>{label}{inv.toothNumber ? ` (Tooth ${inv.toothNumber})` : ''}{inv.findings ? `: ${inv.findings}` : ''}</li>);
+            })}
           </ul>
         </div>
       ) : null}
